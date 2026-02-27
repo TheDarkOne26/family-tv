@@ -1,50 +1,52 @@
 import requests
 import m3u8
 
+# Added even more sources for maximum variety
 SOURCES = [
     "https://tvpass.org/playlist/m3u",
     "https://apsattv.com/ssungusa.m3u",
     "https://i.mjh.nz/all/raw.m3u8",
-    "https://iptv-org.github.io/iptv/index.m3u"
+    "https://iptv-org.github.io/iptv/index.m3u",
+    "https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8"
 ]
 
-def build_categorized_list():
+def build_ultimate_list():
     working_channels = []
     seen_urls = set()
-    
-    # The EPG link we want the TV app to use
     EPG_URL = "https://iptv-org.github.io/epg/guides/all.xml.gz"
 
     for url in SOURCES:
+        print(f"Trying source: {url}")
         try:
-            r = requests.get(url, timeout=15)
+            # Added a longer timeout (30s) in case a source is slow
+            r = requests.get(url, timeout=30)
             playlist = m3u8.loads(r.text)
+            
             for ch in playlist.segments:
                 if ch.uri not in seen_urls:
-                    title = ch.title.upper()
+                    title = ch.title.upper() if ch.title else "UNKNOWN"
                     
-                    # Logic to determine the Category (Group)
-                    if any(word in title for word in ["USA", "NBC", "ABC", "CBS", "FOX", "ESPN"]):
-                        category = "USA"
-                    elif "SPORTS" in title:
-                        category = "SPORTS"
-                    elif any(word in title for word in ["KIDS", "NICK", "DISNEY"]):
-                        category = "KIDS"
+                    # New Logic: If it has a title, we take it!
+                    if any(word in title for word in ["USA", "NBC", "ABC", "CBS", "FOX", "ESPN", "SPORTS"]):
+                        cat = "USA & SPORTS"
+                    elif any(word in title for word in ["KIDS", "NICK", "DISNEY", "CARTOON"]):
+                        cat = "KIDS"
                     else:
-                        category = "INTERNATIONAL"
+                        cat = "INTERNATIONAL & VARIETY"
                     
-                    # Store the channel with its assigned category
-                    ch.category = category 
+                    ch.category = cat
                     working_channels.append(ch)
                     seen_urls.add(ch.uri)
-        except:
+        except Exception as e:
+            print(f"Error on {url}: {e}")
             continue
 
-    # Write the file with the EPG header
+    # Final write to file
     with open("family_safe.m3u", "w", encoding="utf-8") as f:
         f.write(f'#EXTM3U x-tvg-url="{EPG_URL}"\n')
         for ch in working_channels:
-            # group-title creates the folders in the TV app
             f.write(f'#EXTINF:-1 group-title="{ch.category}",{ch.title}\n{ch.uri}\n')
+    print(f"Done! Created list with {len(working_channels)} channels.")
 
-build_categorized_list()
+if __name__ == "__main__":
+    build_ultimate_list()
