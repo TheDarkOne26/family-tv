@@ -1,20 +1,18 @@
 import requests
+import re
 
-# We are bringing back the massive lists. 
-# These are open-source and regularly updated with direct .m3u8 streams.
+# We are using the massive, clean sources
 SOURCES = [
-    "https://iptv-org.github.io/iptv/languages/eng.m3u",       # Massive English list
-    "https://iptv-org.github.io/iptv/categories/sports.m3u",   # Global Sports
-    "https://iptv-org.github.io/iptv/categories/kids.m3u"      # Kids & Family
+    "https://iptv-org.github.io/iptv/languages/eng.m3u",       
+    "https://iptv-org.github.io/iptv/categories/sports.m3u",   
+    "https://iptv-org.github.io/iptv/categories/kids.m3u"      
 ]
 
-def build_massive_playlist():
-    print("Starting the massive scraper...")
+def build_ultimate_roku_list():
+    print("Starting the ultimate scraper...")
     
     with open("family_safe.m3u", "w", encoding="utf-8") as f:
-        # Write the required header once
         f.write("#EXTM3U\n")
-        
         channel_count = 0
         
         for url in SOURCES:
@@ -24,23 +22,26 @@ def build_massive_playlist():
                 if response.status_code == 200:
                     lines = response.text.splitlines()
                     
-                    # Loop through the downloaded list
                     for i in range(len(lines)):
                         if lines[i].startswith("#EXTINF"):
-                            # Check the very next line for the URL
                             if i + 1 < len(lines):
                                 stream_url = lines[i+1].strip()
                                 
-                                # THE BOUNCER: Only allow true video streams (.m3u8, .ts, etc.)
-                                # This is what stops the Roku from crashing!
-                                if stream_url.startswith("http") and any(ext in stream_url.lower() for ext in [".m3u8", ".ts", ".mp4", ".mkv"]):
-                                    f.write(lines[i] + "\n")
-                                    f.write(stream_url + "\n")
+                                # THE BOUNCER: Only allow true video streams
+                                if stream_url.startswith("http") and any(ext in stream_url.lower() for ext in [".m3u8", ".ts"]):
+                                    
+                                    # THE STRIPPER: Remove all the heavy metadata and logos
+                                    # We just keep the channel name (everything after the last comma)
+                                    channel_name = lines[i].split(",")[-1].strip()
+                                    
+                                    # Write the clean, lightweight entry
+                                    f.write(f'#EXTINF:-1,{channel_name}\n')
+                                    f.write(f'{stream_url}\n')
                                     channel_count += 1
             except Exception as e:
                 print(f"Failed to fetch {url}: {e}")
                 
-    print(f"Success! Built a massive playlist with {channel_count} clean stream links.")
+    print(f"Success! Built a Roku-Safe playlist with {channel_count} channels.")
 
 if __name__ == "__main__":
-    build_massive_playlist()
+    build_ultimate_roku_list()
