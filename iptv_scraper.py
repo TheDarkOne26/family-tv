@@ -1,43 +1,46 @@
 import requests
 
-# We will just pull from the English list for this test
-SOURCES = ["https://iptv-org.github.io/iptv/languages/eng.m3u"]
+# We are pulling the TVPass list PLUS the massive global databases
+SOURCES = [
+    "https://tvpass.org/playlist/m3u",
+    "https://iptv-org.github.io/iptv/languages/eng.m3u",
+    "https://iptv-org.github.io/iptv/categories/sports.m3u",
+    "https://iptv-org.github.io/iptv/categories/kids.m3u"
+]
 
-def build_micro_test():
-    print("Starting the micro-test scraper...")
+def build_massive_pc_list():
+    print("Starting the unrestricted scraper for PC...")
+    # Using a User-Agent to ensure TVPass doesn't block the request
+    headers = {'User-Agent': 'Mozilla/5.0'}
     
     with open("family_safe.m3u", "w", encoding="utf-8") as f:
+        # Write the master header once
         f.write("#EXTM3U\n")
+        
         channel_count = 0
         
         for url in SOURCES:
+            print(f"Fetching from: {url}")
             try:
-                response = requests.get(url, timeout=20)
+                response = requests.get(url, headers=headers, timeout=20)
                 if response.status_code == 200:
                     lines = response.text.splitlines()
                     
-                    for i in range(len(lines)):
-                        if lines[i].startswith("#EXTINF"):
-                            if i + 1 < len(lines):
-                                stream_url = lines[i+1].strip()
+                    for line in lines:
+                        # Skip the individual #EXTM3U headers from the source files
+                        if line.strip().upper() == "#EXTM3U":
+                            continue
+                            
+                        # Write everything else directly to the file, keeping all logos and metadata
+                        if line.strip() != "":
+                            f.write(line + "\n")
+                            if line.startswith("#EXTINF"):
+                                channel_count += 1
                                 
-                                # 1. The Bouncer: Video streams only
-                                if stream_url.startswith("http") and any(ext in stream_url.lower() for ext in [".m3u8", ".ts"]):
-                                    channel_name = lines[i].split(",")[-1].strip()
-                                    
-                                    # 2. THE CHARACTER GUARD: Only allow standard English letters/numbers
-                                    # This stops the Roku from panicking on foreign text
-                                    if channel_name.isascii():
-                                        f.write(f'#EXTINF:-1,{channel_name}\n')
-                                        f.write(f'{stream_url}\n')
-                                        channel_count += 1
-                                        
-                                        # 3. THE HARD STOP: Limit to exactly 50 channels for the test
-                                        if channel_count >= 50:
-                                            print("Successfully saved 50 clean channels.")
-                                            return
             except Exception as e:
                 print(f"Failed to fetch {url}: {e}")
+                
+    print(f"Success! Built a massive, unrestricted PC playlist with {channel_count} channels.")
 
 if __name__ == "__main__":
-    build_micro_test()
+    build_massive_pc_list()
