@@ -1,8 +1,20 @@
 import os
 import re
+import urllib.request
 
 input_file = os.path.join(".", "scraped_raw.m3u")
 output_file = os.path.join(".", "family_safe.m3u")
+
+# The list of category URLs you want to pull from
+SOURCE_URLS = [
+    "https://iptv-org.github.io/iptv/categories/sports.m3u",
+    "https://iptv-org.github.io/iptv/categories/movies.m3u",
+    "https://iptv-org.github.io/iptv/categories/kids.m3u",
+    "https://iptv-org.github.io/iptv/categories/entertainment.m3u",
+    "https://iptv-org.github.io/iptv/categories/comedy.m3u",
+    "https://iptv-org.github.io/iptv/categories/family.m3u",
+    "https://iptv-org.github.io/iptv/categories/general.m3u"
+]
 
 EPG_URLS = [
     "https://tvpass.org/epg.xml",
@@ -22,14 +34,8 @@ ALLOWED_IDS = {
     "nfl-network", "nfl-redzone", "nickelodeon-usa-east-feed",
     "paramount-with-showtime-eastern-feed", "starz-eastern",
     "tnt-eastern-feed", "usa-network-east-feed",
-    "disney-junior-usa-east", "cartoon-network-usa-eastern-feed",
-    "nick-jr-east", "animal-planet-us-east", "tlc-usa-eastern",
-    "hallmark-eastern-feed", "lifetime-network-us-eastern-feed"
-}
-
-# Map group-title values to clean categories
-GROUP_MAP = {
-    "Live": None  # will be replaced based on tvg-id
+    "disney-junior-usa-east", "nick-jr-east", "animal-planet-us-east", 
+    "tlc-usa-eastern", "hallmark-eastern-feed", "lifetime-network-us-eastern-feed"
 }
 
 SPORTS_IDS = {"espn", "espn2", "fox-sports-1", "fox-sports-2", "nfl-network", "nfl-redzone"}
@@ -48,6 +54,34 @@ def get_group(tvg_id):
         return "News"
     return "Entertainment"
 
+def download_and_combine_playlists():
+    print("Downloading and combining playlists...")
+    combined_content = []
+    
+    for url in SOURCE_URLS:
+        print(f"Fetching {url}...")
+        try:
+            # We use a standard user agent so the server doesn't block the automated request
+            req = urllib.request.Request(
+                url, 
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+            )
+            with urllib.request.urlopen(req) as response:
+                content = response.read().decode('utf-8')
+                combined_content.append(content)
+        except Exception as e:
+            print(f"Failed to download {url}: {e}")
+            
+    if combined_content:
+        # Write all downloaded text into one large temporary file
+        with open(input_file, 'w', encoding='utf-8') as out_file:
+            for text in combined_content:
+                out_file.write(text)
+                out_file.write("\n")
+        print("Successfully downloaded and combined all lists!")
+        return True
+    return False
+
 def build_clean_playlist(input_path, output_path):
     with open(input_path, "r", encoding="utf-8") as f:
         lines = f.readlines()
@@ -61,7 +95,7 @@ def build_clean_playlist(input_path, output_path):
     while i < len(lines):
         line = lines[i].strip()
 
-        # Skip any extra EXTM3U headers mid-file
+        # Skip any extra headers from combining multiple lists
         if line.startswith("#EXTM3U"):
             i += 1
             continue
@@ -86,6 +120,12 @@ def build_clean_playlist(input_path, output_path):
     with open(output_path, "w", encoding="utf-8") as f:
         f.writelines(output_lines)
 
-    print(f"Done. Wrote {sum(1 for l in output_lines if l.startswith('#EXTINF'))} channels.")
+    print(f"Done. Wrote {sum(1 for l in output_lines if l.startswith('#EXTINF'))} channels to your family safe list.")
 
-build_clean_playlist(input_file, output_file)
+# --- Main Execution ---
+# 1. Download and combine the massive raw lists first
+if download_and_combine_playlists():
+    # 2. Only run the cleaner if the download succeeded
+    build_clean_playlist(input_file, output_file)
+else:
+    print("Script stopped because the raw files could not be retrieved.")
