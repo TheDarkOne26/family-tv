@@ -21,7 +21,7 @@ EPG_URLS = [
     "https://worker-9dd4.onrender.com/guide.xml.gz"
 ]
 
-# Channels to keep (tvg-id values from your playlist)
+# (Temporarily ignored while restrictions are lifted, but kept here for your future reference)
 ALLOWED_IDS = {
     "ae-us-eastern-feed", "abc-wabc-new-york-ny", "amc-eastern-feed",
     "cartoon-network-usa-eastern-feed", "cbs-wcbs-new-york-ny",
@@ -44,14 +44,16 @@ MOVIE_IDS = {"hbo-eastern-feed", "cinemax-eastern-feed", "starz-eastern", "amc-e
 NEWS_IDS = {"cnn", "abc-wabc-new-york-ny", "cbs-wcbs-new-york-ny", "nbc-wnbc-new-york-ny", "fox-news"}
 
 def get_group(tvg_id):
-    if tvg_id in SPORTS_IDS:
-        return "Sports"
-    if tvg_id in KIDS_IDS:
-        return "Kids"
-    if tvg_id in MOVIE_IDS:
-        return "Movies"
-    if tvg_id in NEWS_IDS:
-        return "News"
+    # Quick cleanup to handle different variations of IDs lowercase
+    tvg_id_lower = tvg_id.lower()
+    for sport in SPORTS_IDS:
+        if sport in tvg_id_lower: return "Sports"
+    for kid in KIDS_IDS:
+        if kid in tvg_id_lower: return "Kids"
+    for movie in MOVIE_IDS:
+        if movie in tvg_id_lower: return "Movies"
+    for news in NEWS_IDS:
+        if news in tvg_id_lower: return "News"
     return "Entertainment"
 
 def download_and_combine_playlists():
@@ -61,7 +63,6 @@ def download_and_combine_playlists():
     for url in SOURCE_URLS:
         print(f"Fetching {url}...")
         try:
-            # We use a standard user agent so the server doesn't block the automated request
             req = urllib.request.Request(
                 url, 
                 headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
@@ -73,7 +74,6 @@ def download_and_combine_playlists():
             print(f"Failed to download {url}: {e}")
             
     if combined_content:
-        # Write all downloaded text into one large temporary file
         with open(input_file, 'w', encoding='utf-8') as out_file:
             for text in combined_content:
                 out_file.write(text)
@@ -87,7 +87,6 @@ def build_clean_playlist(input_path, output_path):
         lines = f.readlines()
 
     output_lines = []
-    # Write single clean header with all EPG sources combined
     epg_combined = ",".join(EPG_URLS)
     output_lines.append(f'#EXTM3U x-tvg-url="{epg_combined}"\n')
 
@@ -95,37 +94,41 @@ def build_clean_playlist(input_path, output_path):
     while i < len(lines):
         line = lines[i].strip()
 
-        # Skip any extra headers from combining multiple lists
         if line.startswith("#EXTM3U"):
             i += 1
             continue
 
         if line.startswith("#EXTINF"):
-            # Extract tvg-id
+            # Extract tvg-id just to handle sorting groups automatically
             match = re.search(r'tvg-id="([^"]*)"', line)
-            if match:
-                tvg_id = match.group(1)
-                if tvg_id in ALLOWED_IDS:
-                    # Fix the group-title
-                    correct_group = get_group(tvg_id)
-                    line = re.sub(r'group-title="[^"]*"', f'group-title="{correct_group}"', line)
-                    output_lines.append(line + "\n")
-                    # Write the URL on the next line
-                    if i + 1 < len(lines):
-                        output_lines.append(lines[i + 1])
-                    i += 2
-                    continue
+            tvg_id = match.group(1) if match else ""
+            
+            # --- RESTRICTIONS LIFTED ---
+            # Group assignment sorting happens here
+            correct_group = get_group(tvg_id)
+            
+            # If the channel already has a group-title parameter, modify it. If not, inject it.
+            if 'group-title="' in line:
+                line = re.sub(r'group-title="[^"]*"', f'group-title="{correct_group}"', line)
+            else:
+                line = line.replace('#EXTINF:-1', f'#EXTINF:-1 group-title="{correct_group}"')
+                
+            output_lines.append(line + "\n")
+            
+            # Grabs the streaming stream link on the immediate next line
+            if i + 1 < len(lines):
+                output_lines.append(lines[i + 1].strip() + "\n")
+            i += 2
+            continue
         i += 1
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.writelines(output_lines)
 
-    print(f"Done. Wrote {sum(1 for l in output_lines if l.startswith('#EXTINF'))} channels to your family safe list.")
+    print(f"Done. Wrote {sum(1 for l in output_lines if l.startswith('#EXTINF'))} channels to your open list.")
 
 # --- Main Execution ---
-# 1. Download and combine the massive raw lists first
 if download_and_combine_playlists():
-    # 2. Only run the cleaner if the download succeeded
     build_clean_playlist(input_file, output_file)
 else:
     print("Script stopped because the raw files could not be retrieved.")
