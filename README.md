@@ -2,7 +2,7 @@
 
 One combined TV playlist, rebuilt automatically every day.
 
-A GitHub Action merges several category playlists from [iptv-org](https://github.com/iptv-org/iptv) (sports, movies, kids, entertainment, comedy, family and general) into a single `.m3u` file and publishes it here. It keeps **English-language channels only**, drops channels iptv-org marks as geo-blocked or not 24/7 (they usually won't play), and removes duplicates. About 1,250 channels.
+A GitHub Action merges several category playlists from [iptv-org](https://github.com/iptv-org/iptv) (sports, movies, kids, entertainment, comedy, family and general) into a single `.m3u` file and publishes it here. It keeps **English-language channels only**, drops channels iptv-org marks as geo-blocked or not 24/7 (they usually won't play), removes duplicates, and tests every stream so channels whose stream is gone are left out. About 1,150 channels.
 
 ## Use it
 
@@ -33,15 +33,22 @@ Edit the settings at the top of `iptv_scraper.py`:
 - `LANGUAGES`: language codes to keep, e.g. `["eng", "spa"]`. Use `[]` for every language.
 - `SOURCE_URLS`: which iptv-org categories to merge.
 - `SKIP_LABELS`: delete an entry to keep geo-blocked or part-time channels.
+- `CHECK_STREAMS`: set to `False` to skip the daily stream test.
+
+## Dead streams
+
+Each run fetches every stream the way a player does and leaves out channels whose stream is clearly gone: removed (404 or 410), a server that no longer exists or refuses connections, a link that leads to a web page, or an empty playlist. A failing stream is retried once before it's dropped, and dropped channels come back on their own if the stream returns.
+
+Channels that are only blocked (403), hit a server error or time out are kept, because some broadcasters block GitHub's servers but work fine at home. So some channels in the list may still not play for you. If more than a third of streams fail in one run, the script assumes the problem is on GitHub's side and drops nothing.
 
 ## How it works
 
 | File | What it does |
 |---|---|
-| `iptv_scraper.py` | Downloads each category playlist, keeps the chosen languages, removes duplicate and unreliable channels and writes `family_safe.m3u`. If a source fails, it keeps the previous playlist instead of publishing a broken one. |
+| `iptv_scraper.py` | Downloads each category playlist, keeps the chosen languages, removes duplicate, unreliable and dead channels and writes `family_safe.m3u`. If a source fails, it keeps the previous playlist instead of publishing a broken one. |
 | `.github/workflows/main.yml` | Runs the script daily and commits the playlist only when it actually changed. Can also be started from the **Actions** tab with **Run workflow**. |
 
-To build it yourself: `python iptv_scraper.py` (Python 3, no extra packages).
+To build it yourself: `python iptv_scraper.py` (Python 3.9+, no extra packages). The stream test takes a couple of minutes.
 
 ## Disclaimer
 
